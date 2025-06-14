@@ -1,0 +1,23 @@
+# Core dependencies
+anthropic>=0.25.0
+sseclient-py
+pydantic
+python-dotenv
+
+# MCP (Model Context Protocol) dependencies
+mcp
+httpx
+
+# Enhanced CLI dependencies
+rich>=13.0.0
+prompt-toolkit>=3.0.0
+click>=8.0.0
+yaspin>=3.0.0
+
+# Tool dependencies (optional)
+requests
+beautifulsoup4
+validators
+pyautogui
+Pillow
+e2b-code-interpreter
