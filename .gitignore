@@ -170,3 +170,4 @@ $RECYCLE.BIN/
 *.orig
 *.tmp
 
+.env
