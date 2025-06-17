@@ -1,25 +1,26 @@
-# Feature Implementation Plan: Multi-LLM Provider Support for ThinkChain
+# Feature Implementation Plan: Universal LLM Provider Support for ThinkChain
 
 ## Executive Summary
 
 ### Feature Overview
-Transform ThinkChain from an Anthropic-exclusive tool into a **multi-LLM platform** supporting both Anthropic Claude and Google Gemini models. Users can seamlessly switch between providers using command-line flags, environment variables, or runtime configuration, while maintaining all existing features including streaming responses, tool execution with thinking feedback loops, and the rich UI experience.
+Transform ThinkChain from a single-provider tool into a **universal LLM platform** that can work with any language model provider through a standardized adapter interface. Users can seamlessly switch between providers using command-line flags, environment variables, or runtime configuration, while maintaining all existing features including streaming responses, tool execution with thinking feedback loops, and the rich UI experience.
 
 ### Key Technical Challenges Addressed
-1. **Thinking Feature Parity**: Both Anthropic and Gemini have native thinking support, but Gemini's API has inconsistent thought visibility
-2. **Streaming API Variations**: SSE-based streaming (Anthropic) vs iterator-based streaming (Gemini)
-3. **Function Calling Semantics**: Different schema formats and execution flows between providers
-4. **Provider-Specific Features**: Graceful handling of features unique to each provider
-5. **API Stability**: Gemini's thinking output availability varies; requires graceful fallback
+1. **Streaming API Diversity**: Different streaming implementations (SSE, iterators, callbacks, etc.)
+2. **Thinking Feature Parity**: Both Anthropic and Gemini have native thinking support, but with different APIs and behaviors
+3. **Tool Execution Consistency**: Tools must work across providers with different function calling schemas, parameter passing, and execution flows
+4. **Provider-Specific Features**: Graceful handling of capabilities unique to each provider
+5. **Message Format Differences**: Varying conversation history and role structures
 
 ### Implementation Approach
 Introduce a **provider-agnostic adapter layer** that abstracts LLM interactions behind a common interface. Both UI implementations (`thinkchain.py` and `thinkchain_cli.py`) will use this adapter layer, eliminating code duplication and enabling easy addition of future providers. The approach preserves the core innovation of ThinkChain: tool result injection into the thinking stream for more intelligent responses.
 
 ### Success Metrics
-* **Feature Parity**: All existing Anthropic features work identically with Gemini
+* **Provider Agnosticism**: All core features work across any compatible provider
 * **Performance**: <100ms overhead from adapter layer
 * **Code Quality**: 95% test coverage on adapter implementations
-* **Developer Experience**: Adding a new provider requires implementing only one interface
+* **Developer Experience**: Adding a new provider requires implementing only one standardized interface
+* **Capability Flexibility**: System gracefully handles providers with different feature sets
 
 ---
 
@@ -29,31 +30,26 @@ Introduce a **provider-agnostic adapter layer** that abstracts LLM interactions 
 ```
 thinkchain/
 ├── llm_adapters/
-│   ├── __init__.py
-│   ├── base.py                    # Abstract base adapter
-│   ├── anthropic_adapter.py       # Anthropic implementation  
-│   ├── gemini_adapter.py          # Gemini implementation
-│   └── utils.py                   # Shared utilities
-├── thinkchain.py                   # Enhanced UI (uses adapters)
-├── thinkchain_cli.py              # CLI UI (uses adapters)
-├── run.py                         # Smart launcher with provider detection
-├── tool_discovery.py              # Extended with Gemini schema conversion
-├── config.py                      # Centralized configuration
-└── requirements.txt               # Updated with google-genai>=0.10.0
+│   ├── __init__.py                # Provider registry and factory
+│   ├── base.py                    # Abstract adapter interface
+│   ├── capabilities.py           # Capability detection system
+│   ├── anthropic_adapter.py       # Reference implementation
+│   ├── gemini_adapter.py          # Second implementation
+│   └── utils.py                   # Shared utilities and converters
+├── thinkchain.py                   # Enhanced UI (provider-agnostic)
+├── thinkchain_cli.py              # CLI UI (provider-agnostic)
+├── run.py                         # Smart launcher with auto-detection
+├── tool_discovery.py              # Universal tool schema system
+├── config.py                      # Provider-agnostic configuration
+└── requirements.txt               # Updated with optional dependencies
 ```
 
 ### New Capabilities
-- **Runtime Provider Switching**: Change LLMs mid-conversation with `/provider` command
-- **Unified Tool Schemas**: Tools work identically across all providers
-- **Thinking Simulation**: Gemini users see thinking-like output despite no native support
-- **Streaming Unification**: Consistent streaming experience regardless of provider
+- **Runtime Provider Switching**: Change LLMs mid-conversation with universal `/model` command
+- **Universal Tool Schemas**: Tools work identically across any compatible provider
+- **Capability-Aware UI**: Interface adapts based on provider capabilities
+- **Streaming Abstraction**: Consistent streaming experience regardless of underlying API
 - **Provider Feature Flags**: Gracefully handle provider-specific capabilities
-
-### Performance Characteristics
-- **Latency**: Gemini Flash averages 50-100ms faster first token than Claude Sonnet
-- **Cost**: Gemini Flash ~80% cheaper per token than Claude Sonnet
-- **Context Window**: Both support 1M+ tokens with caching
-- **Tool Execution**: <50ms overhead for adapter translation
 
 ---
 
@@ -68,28 +64,33 @@ graph TB
     
     subgraph "Adapter Layer"
         BA[BaseAdapter ABC]
-        AA[AnthropicAdapter]
-        GA[GeminiAdapter]
-        BA --> AA
-        BA --> GA
+        CAP[Capability System]
+        REG[Provider Registry]
+        CONV[Schema Converters]
+        BA --> CAP
+        BA --> CONV
+        REG --> BA
     end
     
     subgraph "Tool System"
         TD[tool_discovery.py]
-        TS[Tool Schema Converter]
+        TS[Universal Tool Schema]
         TD --> TS
     end
     
-    subgraph "LLM Clients"
-        AC[anthropic.Anthropic]
-        GC[genai.Client]
+    subgraph "Provider Implementations"
+        PA[Provider A]
+        PB[Provider B]
+        PC[Provider C]
+        PX[Future Provider...]
     end
     
-    UI --> BA
-    AA --> AC
-    GA --> GC
-    AA --> TD
-    GA --> TD
+    UI --> REG
+    REG --> PA
+    REG --> PB
+    REG --> PC
+    REG --> PX
+    BA --> TD
 ```
 
 ### Key Design Decisions
@@ -97,58 +98,55 @@ graph TB
 #### 1. Adapter Pattern over Conditional Logic
 **Decision**: Create separate adapter classes instead of if/else blocks throughout code
 **Rationale**: 
-- Cleaner separation of concerns
-- Easier to test each provider in isolation
-- New providers can be added without touching existing code
-- Provider-specific optimizations possible
+- Complete separation of provider logic from core application
+- Enables testing each provider in isolation
+- New providers can be added with zero changes to existing code - just implement the adapter interface
+- Dynamic capability detection handles feature differences
 
 **Trade-offs**:
-- (+) Maintainability, testability, extensibility
+- (+) Maintainability, testability, extensibility, future-proofing
 - (-) Initial implementation complexity, slight runtime overhead
 
 #### 2. Unified Streaming Interface
 **Decision**: Abstract streaming behind async generators regardless of underlying implementation
 **Rationale**:
-- Anthropic uses SSE, Gemini uses iterators - hide this complexity
-- Consistent consumption pattern for UI layer
-- Enables advanced features like stream transformation
+- Providers have vastly different feature sets and APIs
+- Capability detection enables graceful degradation
+- UI can adapt dynamically to available features
 
 **Implementation**:
 ```python
 async def stream_completion(self, messages: List[Message]) -> AsyncIterator[StreamChunk]:
-    """Unified streaming interface for all providers"""
+    """Universal streaming interface with capability awareness"""
+    pass
+
+def get_capabilities(self) -> ProviderCapabilities:
+    """Return what this provider can do (from configuration)"""
     pass
 ```
 
-#### 3. Tool Schema Translation at Discovery Time
-**Decision**: Convert tool schemas once during discovery, not per-request
+#### 3. Universal Tool Schema System
+**Decision**: Create provider-neutral tool definitions with automatic conversion
 **Rationale**:
-- Better performance (one-time cost)
-- Schemas rarely change during runtime
-- Allows for provider-specific optimizations
+- Tool logic should be completely independent of LLM provider
+- Single tool definition works across all providers
+- Conversion happens transparently at the adapter layer
 
 **Trade-offs**:
-- (+) Performance, reduced request complexity
-- (-) Must handle runtime tool updates carefully
-
-#### 4. Thinking Simulation for Gemini
-**Decision**: Synthesize thinking-like output for Gemini using prompt engineering
-**Rationale**:
-- Maintains UI consistency across providers
-- Users expect thinking visualization
-- Can be disabled via configuration
+- (+) DRY principle, easier tool development, universal compatibility
+- (-) Must handle edge cases where providers have incompatible requirements
 
 **Implementation approach**:
 - Inject thinking prompts between tool calls
 - Use response parsing to identify reasoning sections
-- Stream synthetic thinking blocks to UI
+- Stream thinking blocks to UI
 
 ### Interface Definitions
 
 ```python
 # llm_adapters/base.py
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, List, Dict, Any, Optional
+from typing import AsyncIterator, List, Dict, Any, Optional, Set
 from dataclasses import dataclass
 import enum
 
@@ -158,25 +156,51 @@ class Role(enum.Enum):
     SYSTEM = "system"
     TOOL = "tool"
 
+class ProviderCapability(enum.Enum):
+    """Enumeration of possible provider capabilities"""
+    STREAMING = "streaming"
+    FUNCTION_CALLING = "function_calling"
+    VISION = "vision"
+    REASONING_DISPLAY = "reasoning_display"
+    SYSTEM_MESSAGES = "system_messages"
+    CONVERSATION_MEMORY = "conversation_memory"
+    CONTEXT_CACHING = "context_caching"
+    CUSTOM_INSTRUCTIONS = "custom_instructions"
+    STRUCTURED_OUTPUT = "structured_output"
+    CODE_EXECUTION = "code_execution"
+
 @dataclass
 class Message:
     role: Role
     content: Any  # Can be str, List[Part], or provider-specific format
+    metadata: Optional[Dict[str, Any]] = None
     
 @dataclass
 class StreamChunk:
-    """Unified stream chunk across all providers"""
+    """Universal stream chunk across all providers"""
     delta_text: Optional[str] = None
-    thinking_text: Optional[str] = None
+    reasoning_text: Optional[str] = None  # Generic reasoning/thinking display
     tool_use: Optional['ToolUse'] = None
     finish_reason: Optional[str] = None
     usage: Optional[Dict[str, int]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 @dataclass  
 class ToolUse:
     id: str
     name: str
     arguments: Dict[str, Any]
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class ProviderCapabilities:
+    """Capabilities available for a specific provider"""
+    capabilities: Set[ProviderCapability]
+    max_context_length: Optional[int] = None
+    supports_streaming: bool = True
+    supports_function_calling: bool = True
+    reasoning_display_name: Optional[str] = None  # e.g., "thinking", "reasoning", "analysis"
+    custom_features: Dict[str, Any] = None
 
 @dataclass
 class CompletionConfig:
@@ -184,17 +208,21 @@ class CompletionConfig:
     model: str
     temperature: float = 0.7
     max_tokens: int = 4096
-    thinking_budget: Optional[int] = None  # Anthropic-specific, ignored by others
+    reasoning_enabled: bool = False
+    reasoning_budget: Optional[int] = None
     tools: Optional[List[Dict[str, Any]]] = None
     system_prompt: Optional[str] = None
-    # Provider-specific overrides
+    # Provider-agnostic feature flags
+    enable_streaming: bool = True
+    enable_reasoning_display: bool = True
+    # Provider-specific overrides (passed directly to provider)
     provider_config: Dict[str, Any] = None
 
 class BaseAdapter(ABC):
-    """Abstract base class for LLM provider adapters"""
+    """Abstract base class for universal LLM provider adapters"""
     
     @abstractmethod
-    async def initialize(self, api_key: Optional[str] = None) -> None:
+    async def initialize(self, **credentials) -> None:
         """Initialize the adapter with credentials"""
         pass
     
@@ -204,30 +232,46 @@ class BaseAdapter(ABC):
         messages: List[Message],
         config: CompletionConfig
     ) -> AsyncIterator[StreamChunk]:
-        """Stream a completion with unified interface"""
+        """Stream a completion with universal interface"""
         pass
     
     @abstractmethod
-    def convert_tool_schema(self, tool: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert tool schema to provider-specific format"""
+    def convert_tool_schema(self, tool: Dict[str, Any]) -> Any:
+        """Convert universal tool schema to provider-specific format"""
         pass
     
     @abstractmethod
     async def count_tokens(self, messages: List[Message]) -> Dict[str, int]:
         """Count tokens for the given messages"""
         pass
-        
-    @property
+    
     @abstractmethod
-    def supports_thinking(self) -> bool:
-        """Whether this provider natively supports thinking"""
+    def get_capabilities(self) -> ProviderCapabilities:
+        """Return the capabilities of this provider"""
         pass
     
-    @property
-    @abstractmethod  
-    def supports_vision(self) -> bool:
-        """Whether this provider supports image inputs"""
+    @abstractmethod
+    def get_provider_name(self) -> str:
+        """Return the name of this provider"""
         pass
+    
+    @abstractmethod
+    def get_available_models(self) -> List[str]:
+        """Return list of available models for this provider"""
+        pass
+    
+    def supports_capability(self, capability: ProviderCapability) -> bool:
+        """Check if provider supports a specific capability"""
+        return capability in self.get_capabilities().capabilities
+        
+    def get_max_context_length(self) -> Optional[int]:
+        """Get maximum context length for current model"""
+        return self.get_capabilities().max_context_length
+        
+    async def prepare_messages(self, messages: List[Message]) -> Any:
+        """Convert universal messages to provider-specific format"""
+        # Default implementation - providers can override
+        return messages
 ```
 
 ---
@@ -567,26 +611,50 @@ class GeminiAdapter(BaseAdapter):
 Key changes:
 ```python
 # tool_discovery.py additions
-def get_provider_tools(provider: str) -> List[Dict[str, Any]]:
-    """Get tools in provider-specific format"""
-    adapter = get_adapter(provider)
-    base_tools = get_claude_tools()  # Existing function
-    
-    if provider == 'anthropic':
-        return base_tools  # Already in correct format
-    else:
-        return [adapter.convert_tool_schema(tool) for tool in base_tools]
+def get_universal_tools() -> List[Dict[str, Any]]:
+    """Get tools in universal schema format"""
+    # Existing function renamed and made provider-agnostic
+    return get_claude_tools()  # Temporary compatibility
 
-def create_tool_awareness_message(provider: str) -> str:
-    """Create provider-specific tool awareness message"""
-    if provider == 'gemini':
-        return (
-            "You have access to various tools. When using tools, always explain "
-            "your reasoning first (prefix with [THINKING]). Use tool results to "
-            "provide comprehensive answers."
-        )
+def get_provider_tools(adapter: BaseAdapter) -> Any:
+    """Get tools converted to provider-specific format"""
+    universal_tools = get_universal_tools()
+    return [adapter.convert_tool_schema(tool) for tool in universal_tools]
+
+def create_tool_awareness_message(adapter: BaseAdapter) -> str:
+    """Create provider-aware tool awareness message"""
+    capabilities = adapter.get_capabilities()
+    provider_name = adapter.get_provider_name()
+    
+    base_message = "You have access to various tools for helping users."
+    
+    # Adapt message based on capabilities
+    if adapter.supports_capability(ProviderCapability.REASONING_DISPLAY):
+        reasoning_name = capabilities.reasoning_display_name or "reasoning"
+        base_message += f" When using tools, explain your {reasoning_name} process."
+    
+    if adapter.supports_capability(ProviderCapability.FUNCTION_CALLING):
+        base_message += " Call tools when they would help answer the user's question."
+    
+    return f"{base_message} Use tool results to provide comprehensive answers."
+
+def get_capability_message(adapter: BaseAdapter) -> str:
+    """Generate a message describing provider capabilities"""
+    capabilities = adapter.get_capabilities()
+    provider_name = adapter.get_provider_name()
+    
+    features = []
+    if adapter.supports_capability(ProviderCapability.REASONING_DISPLAY):
+        features.append(f"{capabilities.reasoning_display_name or 'reasoning'} display")
+    if adapter.supports_capability(ProviderCapability.VISION):
+        features.append("image analysis")
+    if adapter.supports_capability(ProviderCapability.CODE_EXECUTION):
+        features.append("code execution")
+    
+    if features:
+        return f"Provider '{provider_name}' supports: {', '.join(features)}"
     else:
-        return create_tool_awareness_message()  # Existing function
+        return f"Provider '{provider_name}' ready for conversation"
 ```
 
 #### Task 2.2: Refactor UI to Use Adapters
@@ -595,23 +663,25 @@ def create_tool_awareness_message(provider: str) -> str:
 
 Example refactoring for stream_once:
 ```python
-# Before (Anthropic-specific)
+# Before (Provider-specific)
 def stream_once(transcript: list[dict]) -> dict:
     with client.messages.stream(...) as stream:
         for chunk in stream:
-            # Process Anthropic-specific chunks
+            # Process provider-specific chunks
             
-# After (Provider-agnostic)
+# After (Universal provider support)
 async def stream_once(transcript: list[dict], adapter: BaseAdapter, config: CompletionConfig) -> dict:
     messages = convert_transcript_to_messages(transcript)
+    capabilities = adapter.get_capabilities()
     
     async for chunk in adapter.stream_completion(messages, config):
-        if chunk.thinking_text:
-            ui.print(f"💭 [bold blue]Thinking:[/bold blue] {chunk.thinking_text}")
+        if chunk.reasoning_text and capabilities.reasoning_display_name:
+            reasoning_name = capabilities.reasoning_display_name
+            ui.print(f"🧠 [bold blue]{reasoning_name.title()}:[/bold blue] {chunk.reasoning_text}")
         elif chunk.delta_text:
             ui.console.print(chunk.delta_text, end='')
         elif chunk.tool_use:
-            await handle_tool_use(chunk.tool_use, adapter)
+            await handle_tool_use(chunk.tool_use, adapter, capabilities)
 ```
 
 #### Task 2.3: Configuration Management System
@@ -621,63 +691,116 @@ async def stream_once(transcript: list[dict], adapter: BaseAdapter, config: Comp
 ```python
 # config.py
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import os
 import json
+from llm_adapters.base import ProviderCapability
+
+@dataclass
+class ProviderConfig:
+    """Configuration for a specific provider"""
+    name: str
+    default_model: str
+    credentials: Dict[str, str] = field(default_factory=dict)
+    model_options: List[str] = field(default_factory=list)
+    custom_config: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class ThinkChainConfig:
-    """Centralized configuration for ThinkChain"""
-    # Provider settings
-    provider: str = "anthropic"
-    anthropic_api_key: Optional[str] = None
-    google_api_key: Optional[str] = None
+    """Universal configuration for ThinkChain"""
+    # Active provider
+    active_provider: str = "auto"
     
-    # Model settings
-    anthropic_model: str = "claude-sonnet-4-20250514"
-    gemini_model: str = "gemini-2.0-flash-001"
+    # Provider configurations
+    providers: Dict[str, ProviderConfig] = field(default_factory=dict)
     
-    # Common settings
+    # Universal settings
     temperature: float = 0.7
     max_tokens: int = 4096
-    thinking_budget: int = 1024
+    reasoning_enabled: bool = True
+    reasoning_budget: Optional[int] = None
     
     # UI settings
-    show_thinking: bool = True
+    show_reasoning: bool = True
     stream_delay_ms: int = 0
+    enable_rich_ui: bool = True
     
-    # Provider-specific overrides
-    provider_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    # Feature preferences (used when multiple providers support a feature)
+    preferred_capabilities: List[ProviderCapability] = field(default_factory=lambda: [
+        ProviderCapability.REASONING_DISPLAY,
+        ProviderCapability.FUNCTION_CALLING,
+        ProviderCapability.STREAMING
+    ])
     
     @classmethod
     def from_env(cls) -> 'ThinkChainConfig':
         """Load configuration from environment variables"""
         config = cls()
         
-        # Detect provider from environment
-        if os.getenv("GOOGLE_API_KEY") and not os.getenv("ANTHROPIC_API_KEY"):
-            config.provider = "gemini"
-        elif os.getenv("GOOGLE_GENAI_USE_VERTEXAI"):
-            config.provider = "gemini"
-            
-        # Load API keys
-        config.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-        config.google_api_key = os.getenv("GOOGLE_API_KEY")
+        # Auto-detect available providers from environment
+        providers = {}
         
-        # Load other settings
-        if os.getenv("THINKCHAIN_MODEL"):
-            if config.provider == "gemini":
-                config.gemini_model = os.getenv("THINKCHAIN_MODEL")
-            else:
-                config.anthropic_model = os.getenv("THINKCHAIN_MODEL")
+        # Check for Anthropic
+        if os.getenv("ANTHROPIC_API_KEY"):
+            providers["anthropic"] = ProviderConfig(
+                name="anthropic",
+                default_model=os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"),
+                credentials={"api_key": os.getenv("ANTHROPIC_API_KEY")}
+            )
+        
+        # Check for Google/Gemini
+        if os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_GENAI_USE_VERTEXAI"):
+            gemini_creds = {}
+            if os.getenv("GOOGLE_API_KEY"):
+                gemini_creds["api_key"] = os.getenv("GOOGLE_API_KEY")
+            if os.getenv("GOOGLE_GENAI_USE_VERTEXAI"):
+                gemini_creds["use_vertex"] = True
+                gemini_creds["project_id"] = os.getenv("GOOGLE_CLOUD_PROJECT")
+                gemini_creds["location"] = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
                 
+            providers["gemini"] = ProviderConfig(
+                name="gemini",
+                default_model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash-001"),
+                credentials=gemini_creds
+            )
+        
+        config.providers = providers
+        
+        # Set active provider
+        explicit_provider = os.getenv("THINKCHAIN_PROVIDER")
+        if explicit_provider and explicit_provider in providers:
+            config.active_provider = explicit_provider
+        elif providers:
+            # Auto-select first available provider
+            config.active_provider = list(providers.keys())[0]
+        
+        # Load universal settings
+        config.temperature = float(os.getenv("THINKCHAIN_TEMPERATURE", "0.7"))
+        config.max_tokens = int(os.getenv("THINKCHAIN_MAX_TOKENS", "4096"))
+        config.reasoning_enabled = os.getenv("THINKCHAIN_REASONING", "true").lower() == "true"
+        
         return config
     
-    def get_active_model(self) -> str:
-        """Get the model for the current provider"""
-        if self.provider == "gemini":
-            return self.gemini_model
-        return self.anthropic_model
+    def get_provider_config(self, provider_name: str) -> Optional[ProviderConfig]:
+        """Get configuration for a specific provider"""
+        return self.providers.get(provider_name)
+    
+    def get_active_provider_config(self) -> Optional[ProviderConfig]:
+        """Get configuration for the currently active provider"""
+        if self.active_provider == "auto" and self.providers:
+            return list(self.providers.values())[0]
+        return self.get_provider_config(self.active_provider)
+    
+    def get_available_providers(self) -> List[str]:
+        """Get list of configured and available providers"""
+        return list(self.providers.keys())
+    
+    def set_active_provider(self, provider_name: str) -> bool:
+        """Set the active provider if it's available"""
+        if provider_name in self.providers:
+            self.active_provider = provider_name
+            return True
+        return False
 ```
 
 ### Phase 3: Advanced Features
@@ -690,27 +813,57 @@ Implementation in chat command handler:
 ```python
 def handle_provider_command(args, current_adapter, config):
     """Handle /provider command"""
+    available_providers = config.get_available_providers()
+    current_provider = config.active_provider
+    
     if not args:
-        ui.print(f"Current provider: {config.provider}")
-        ui.print("Available: anthropic, gemini")
+        ui.print(f"Current provider: {current_provider}")
+        if available_providers:
+            ui.print(f"Available: {', '.join(available_providers)}")
+        else:
+            ui.print("No providers configured")
         return current_adapter
         
     new_provider = args[0].lower()
-    if new_provider not in ['anthropic', 'gemini']:
-        ui.print_error("Invalid provider", f"Choose from: anthropic, gemini")
+    if new_provider not in available_providers:
+        ui.print_error("Invalid provider", f"Choose from: {', '.join(available_providers)}")
         return current_adapter
         
     # Create new adapter
     try:
+        from llm_adapters import get_adapter
         new_adapter = get_adapter(new_provider)
-        await new_adapter.initialize()
+        
+        # Get credentials for this provider
+        provider_config = config.get_provider_config(new_provider)
+        if not provider_config:
+            ui.print_error("Provider not configured", f"No configuration found for {new_provider}")
+            return current_adapter
+            
+        await new_adapter.initialize(**provider_config.credentials)
         
         # Update config
-        config.provider = new_provider
+        config.set_active_provider(new_provider)
+        
+        # Get capabilities and model info
+        capabilities = new_adapter.get_capabilities()
+        current_model = provider_config.default_model
         
         # Notify user
         ui.print_success(f"Switched to {new_provider}")
-        ui.print(f"Now using model: {config.get_active_model()}")
+        ui.print(f"Model: {current_model}")
+        
+        # Show available capabilities
+        features = []
+        if new_adapter.supports_capability(ProviderCapability.REASONING_DISPLAY):
+            features.append(capabilities.reasoning_display_name or "reasoning")
+        if new_adapter.supports_capability(ProviderCapability.VISION):
+            features.append("vision")
+        if new_adapter.supports_capability(ProviderCapability.FUNCTION_CALLING):
+            features.append("tools")
+            
+        if features:
+            ui.print(f"Capabilities: {', '.join(features)}")
         
         # Update chat history with provider switch notification
         chat_history.append({
@@ -1216,44 +1369,83 @@ async def test_thinking_fallback():
 **Files**: `ui_components.py`
 
 ```python
-def print_provider_status(provider: str, model: str, features: Dict[str, bool]):
+def print_provider_status(adapter: BaseAdapter, config: ProviderConfig):
     """Show current provider status in UI"""
-    status_table = Table(title=f"Provider: {provider.upper()}")
+    capabilities = adapter.get_capabilities()
+    provider_name = adapter.get_provider_name().upper()
+    
+    status_table = Table(title=f"Provider: {provider_name}")
     status_table.add_column("Feature", style="cyan")
     status_table.add_column("Status", style="green")
     
-    status_table.add_row("Model", model)
-    status_table.add_row("Thinking", "✓" if features['thinking'] else "✗ (simulated)")
-    status_table.add_row("Vision", "✓" if features['vision'] else "✗")
-    status_table.add_row("Streaming", "✓")
+    status_table.add_row("Model", config.default_model)
+    
+    # Dynamic capability display
+    reasoning_support = adapter.supports_capability(ProviderCapability.REASONING_DISPLAY)
+    reasoning_name = capabilities.reasoning_display_name or "reasoning"
+    status_table.add_row(reasoning_name.title(), "✓" if reasoning_support else "✗")
+    
+    vision_support = adapter.supports_capability(ProviderCapability.VISION)
+    status_table.add_row("Vision", "✓" if vision_support else "✗")
+    
+    streaming_support = adapter.supports_capability(ProviderCapability.STREAMING)
+    status_table.add_row("Streaming", "✓" if streaming_support else "✗")
+    
+    tools_support = adapter.supports_capability(ProviderCapability.FUNCTION_CALLING)
+    status_table.add_row("Tools", "✓" if tools_support else "✗")
+    
+    # Context window info
+    if capabilities.max_context_length:
+        context_str = f"{capabilities.max_context_length:,} tokens"
+        status_table.add_row("Context Window", context_str)
     
     console.print(status_table)
 
-def format_thinking_block(text: str, provider: str):
-    """Format thinking output based on provider"""
-    if provider == 'gemini':
-        # Simulated thinking gets different styling
+def format_reasoning_block(text: str, adapter: BaseAdapter):
+    """Format reasoning output based on provider capabilities"""
+    capabilities = adapter.get_capabilities()
+    reasoning_name = capabilities.reasoning_display_name or "reasoning"
+    
+    # Use different styling based on whether it's native or simulated
+    if adapter.supports_capability(ProviderCapability.REASONING_DISPLAY):
         return Panel(
             text,
-            title="[yellow]Reasoning (simulated)[/yellow]",
-            border_style="yellow"
+            title=f"[blue]{reasoning_name.title()}[/blue]",
+            border_style="blue"
         )
     else:
         return Panel(
             text,
-            title="[blue]Thinking[/blue]",
-            border_style="blue"
+            title=f"[yellow]{reasoning_name.title()} (simulated)[/yellow]",
+            border_style="yellow"
         )
+
+def get_provider_icon(adapter: BaseAdapter) -> str:
+    """Get appropriate icon for provider type"""
+    provider_name = adapter.get_provider_name().lower()
+    
+    # Default icons by provider name (can be customized)
+    icons = {
+        "anthropic": "🤖",
+        "gemini": "🔮", 
+        "openai": "🚀",
+        "local": "🏠",
+        "ollama": "🦙"
+    }
+    
+    return icons.get(provider_name, "💬")
 ```
 
 #### Task 5.2: Update Command System
 **Files**: `thinkchain.py`, `thinkchain_cli.py`
 
-New commands to add:
-- `/provider [name]` - Switch providers
-- `/models` - List available models for current provider
-- `/features` - Show feature availability
-- `/compare` - Run same prompt on both providers
+New universal commands to add:
+- `/provider [name]` - Switch between available providers
+- `/providers` - List all configured providers and their status
+- `/models [provider]` - List available models for current or specified provider
+- `/capabilities [provider]` - Show detailed capability matrix
+- `/config` - Show current configuration and provider settings
+- `/optimize` - Suggest optimal provider for current task type
 
 ### Phase 6: Documentation & Launch (Est. 2-3 hours)
 
@@ -1271,20 +1463,37 @@ Key sections:
 
 ```bash
 # .env.example
+# Universal ThinkChain Configuration
+
+# Provider Selection
+THINKCHAIN_PROVIDER=auto  # auto, anthropic, gemini, openai, etc.
+
 # Anthropic Configuration
 ANTHROPIC_API_KEY=your-anthropic-key
+ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
 
-# Google Configuration (choose one)
+# Google/Gemini Configuration (choose one approach)
 # Option 1: Gemini Developer API
 GOOGLE_API_KEY=your-google-key
+GEMINI_MODEL=gemini-2.0-flash-001
 
 # Option 2: Vertex AI
 GOOGLE_GENAI_USE_VERTEXAI=true
-GOOGLE_CLOUD_PROJECT=your-project
+GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=us-central1
 
-# Default provider (anthropic or gemini)
-THINKCHAIN_PROVIDER=anthropic
+# OpenAI Configuration (future)
+# OPENAI_API_KEY=your-openai-key
+# OPENAI_MODEL=gpt-4o
+
+# Universal Settings
+THINKCHAIN_TEMPERATURE=0.7
+THINKCHAIN_MAX_TOKENS=4096
+THINKCHAIN_REASONING=true
+
+# UI Preferences  
+THINKCHAIN_RICH_UI=true
+THINKCHAIN_STREAM_DELAY=0
 ```
 
 ---
@@ -1404,32 +1613,35 @@ Target metrics:
 #### Environment Configuration
 ```bash
 # .env.production
-# Provider Selection
-THINKCHAIN_PROVIDER=anthropic  # Default provider
-THINKCHAIN_FALLBACK_PROVIDER=gemini  # Fallback if primary fails
+# Provider Selection and Failover
+THINKCHAIN_PROVIDER=auto  # auto-detect or specify provider
+THINKCHAIN_FALLBACK_PROVIDER=auto  # automatic failover
 
 # API Keys (use secrets management in production)
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=AIza...
+OPENAI_API_KEY=sk-...
 
-# Or for Vertex AI
+# Alternative: Vertex AI Configuration
 GOOGLE_GENAI_USE_VERTEXAI=true
 GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=us-central1
 
-# Model Configuration
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
-GEMINI_MODEL=gemini-2.5-flash-preview-04-17  # Thinking-enabled model
+# Model Configuration (provider-specific)
+ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+GEMINI_MODEL=gemini-2.0-flash-001
+OPENAI_MODEL=gpt-4o
 
 # Performance Settings
 THINKCHAIN_STREAM_TIMEOUT=30
 THINKCHAIN_MAX_RETRIES=3
 THINKCHAIN_RETRY_DELAY=1.0
 
-# Feature Flags
-THINKCHAIN_ENABLE_THINKING=true
-THINKCHAIN_THINKING_BUDGET_DEFAULT=2048
-THINKCHAIN_AUTO_FALLBACK=true
+# Universal Feature Flags
+THINKCHAIN_REASONING_ENABLED=true
+THINKCHAIN_REASONING_BUDGET_DEFAULT=2048
+THINKCHAIN_AUTO_FAILOVER=true
+THINKCHAIN_CAPABILITY_DETECTION=true
 ```
 
 #### Rate Limiting and Cost Management
