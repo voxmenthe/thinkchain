@@ -234,7 +234,7 @@ class BaseAdapter(ABC):
 
 ## 3. Detailed Implementation Plan
 
-### Phase 1: Foundation Layer (Est. 10-12 hours)
+### Phase 1: Foundation Layer
 
 #### Task 1.1: Create Adapter Infrastructure
 **Priority**: P0 - Blocker for all other work
@@ -557,12 +557,8 @@ class GeminiAdapter(BaseAdapter):
 - Proper chunk processing for both thinking and regular content
 - Support for function calls within the same streaming response
 
-**Current Limitations**:
-- As of late January 2025, thoughts may only be visible in Google AI Studio and not returned via API
-- The implementation includes provisions for this limitation with fallback handling
-- Monitor Gemini API updates for when thought visibility is restored
 
-### Phase 2: Integration Layer (Est. 8-10 hours)
+### Phase 2: Integration Layer
 
 #### Task 2.1: Update Tool Discovery for Multi-Provider
 **Priority**: P0 - Tools must work with all providers
@@ -684,7 +680,7 @@ class ThinkChainConfig:
         return self.anthropic_model
 ```
 
-### Phase 3: Advanced Features (Est. 6-8 hours)
+### Phase 3: Advanced Features
 
 #### Task 3.1: Runtime Provider Switching
 **Priority**: P1 - Enhanced user experience
