@@ -41,7 +41,7 @@ thinkchain/
 ├── run.py                         # Smart launcher with auto-detection
 ├── tool_discovery.py              # Universal tool schema system
 ├── config.py                      # Provider-agnostic configuration
-└── requirements.txt               # Updated with optional dependencies
+└── pypropject.toml               # Updated with optional dependencies and project configuration
 ```
 
 ### New Capabilities

@@ -1,12 +1,102 @@
 [project]
-name = "chain-of-tools"
+name = "thinkchain"
 version = "0.1.0"
 description = "End-to-end demo of interleaved thinking and fine-grained tool streaming with Claude"
+readme = "README.md"
+authors = [
+    { name = "ThinkChain Contributors", email = "contributors@thinkchain.dev" }
+]
+requires-python = ">=3.10"
 dependencies = [
     "anthropic>=0.25.0",
+    "google-genai",
     "sseclient-py",
     "pydantic",
     "python-dotenv",
+    "mcp",
+    "httpx",
+    "rich",
+    "prompt-toolkit",
+    "click",
+    "yaspin",
+    "requests",
+    "beautifulsoup4",
+    "validators",
+    "pyautogui",
+    "Pillow",
+    "e2b-code-interpreter",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "black",
+    "ruff"
 ]
-requires-python = ">=3.8"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio", 
+    "pytest-cov",
+    "black",
+    "ruff"
+]
+
+
+[tool.ruff]
+line-length = 120
+
+# Exclude specific files or directories
+exclude = [
+    "__pypackages__",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "N",  # PEP8 naming conventions
+    "D"   # pydocstyle
+]
+ignore = [
+    "C901",  # too complex
+    "W191",  # indentation contains tabs
+    "D401",  # imperative mood
+    "D103",  # missing docstring in public function
+    "D104",  # missing docstring in public package
+    "D100",  # missing docstring in public module
+    "D101",  # missing docstring in public class
+    "N806",  # variable in function should be lowercase
+    "N803",  # argument name should be lowercase
+    "E501",  # line too long (handled by line-length setting)
+    "D107",  # missing docstring in __init__
+    "D102",  # missing docstring in public method
+    "D201",  # no blank lines allowed before function docstring
+    "D202",  # no blank lines allowed after function docstring
+    "D205",  # 1 blank line required between summary line and description
+    "B904",  # raise from e or raise from None in except clauses
+    "B008",  # do not perform function calls in argument defaults
+    "E402",  # module level import not at top of file
+]
+
+[tool.ruff.per-file-ignores]
+"**/*.ipynb" = ["E402"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"test/**/*.py" = [
+    # Relaxed rules for test files
+    "S101", # asserts allowed in tests
+    "E712", # == for asserts
+    "ARG",  # Unused function args -> fixtures are functionally relevant
+    "FBT",  # Don't care about booleans as positional arguments in tests
+    "PLR2004", # Magic value used in comparison
+    "S311", # Standard pseudo-random generators are not suitable for cryptographic purposes
+    "D",    # Disable docstring requirements in tests
+]
 

@@ -217,3 +217,10 @@ for chunk in client.models.generate_content_stream(
         generation_config=GenerationConfig(max_output_tokens=256)):
     print(chunk.text, end="", flush=True)
 ```
+
+**Gemini Implementation Notes**:
+The new implementation will use the new google-genai SDK (documentation can be found at https://googleapis.github.io/python-genai/ and also here https://ai.google.dev/gemini-api/docs/text-generation).
+
+Note that the SDK and its documentation has recently changed, so it is **very important to read the current documentation on the web** to understand how to use it, and make sure we are using the latest version - you **CANNOT** use your existing knowledge here but must instead make sure to read the documentation, understand it, and document your findings, and use those in your implementation.
+
+The Anthropic SDK may have changed as well, so probably good to double-check the current documentation for it as well.

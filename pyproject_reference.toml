@@ -1,0 +1,141 @@
+# [tool.poetry]
+# name = "demoml"
+# version = "0.1.0"
+# description = "Demo ML Stuff"
+# authors = ["Jeff Coggshall <thenextlocalminima@gmail.com>"]
+# readme = "README.md"
+# packages = [
+#     { include = "scripts", from = "src" },
+#     { include = "utils", from = "src" }
+# ]
+
+[project]
+name = "demoml"
+version = "0.1.0"
+description = "Demo ML Stuff"
+readme = "README.md"
+authors = [
+    { name = "Jeff Coggshall", email = "thenextlocalminima@gmail.com" }
+]
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "pillow == 11.1.0",
+    "multidict == 6.2.0",
+    "ipykernel ~= 6.29.0",
+    "ipywidgets ~= 8.1.1",
+    "instructor",
+    "notebook",
+    "jupyter",
+    "nbconvert",
+    "regex",
+    "nltk",
+    "mermaid-py",
+    "scikit-learn",
+    "bitsandbytes",
+    "transformers",
+    "accelerate",
+    "tensorboard",
+    "numpy",
+    "pandas",
+    "plotly",
+    "polars",
+    "python-dotenv",
+    "db-dtypes",
+    "scipy",
+    "seaborn",
+    "standard-imghdr",
+    "matplotlib",
+    "click",
+    "mistralai",
+    "markdown",
+    "requests",
+    "kaggle",
+    "xgboost",
+    "lightgbm",
+    "catboost",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "openai",
+    "anthropic",
+    "langchain",
+    "llama-index",
+    "google-genai",
+    "searcharray",
+    "sentence-transformers",
+    "weasyprint"
+]
+
+
+# [tool.poetry.dependencies]
+# (migrated to [project] dependencies)
+
+
+[dependency-groups]
+dev = [
+    "pytest >=8.0.0,<9.0.0",
+    "black >=24.1.0,<25.0.0",
+    "ruff >=0.2.0,<1.0.0"
+]
+
+# [build-system]
+# requires = ["poetry-core>=1.5.0"]
+# build-backend = "poetry.core.masonry.api"
+
+[tool.uv]
+default-groups = []
+
+[tool.ruff]
+line-length = 120
+
+# Add this new section to exclude specific files or directories
+exclude = [
+    "__pypackages__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "N",  # PEP8 naming convetions
+    "D"  # pydocstyle
+]
+ignore = [
+    "C901",  # too complex
+    "W191",  # indentation contains tabs
+    "D401",  # imperative mood
+    "D103",
+    "D104",
+    "D100",
+    "D101",
+    "N806",
+    "N803",
+    "E501",
+    "D107",
+    "D102",
+    "D201",
+    "D202",
+    "D205",
+    "B904",
+    "B008",
+    "E402",
+]
+
+[tool.ruff.per-file-ignores]
+"**/*.ipynb" = ["E402"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = [
+    # at least this three should be fine in tests:
+    "S101", # asserts allowed in tests...
+    "E712", # == for asserts
+    "ARG", # Unused function args -> fixtures nevertheless are functionally relevant...
+    "FBT", # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
+    # The below are debateable
+    "PLR2004", # Magic value used in comparison, ...
+    "S311", # Standard pseudo-random generators are not suitable for cryptographic purposes
+]
